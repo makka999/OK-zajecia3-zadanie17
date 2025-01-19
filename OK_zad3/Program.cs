@@ -1,77 +1,111 @@
-﻿
-// Zadanie 17
-
-// Ile jest liczb całkowitych pomiędzy 𝑎 i 𝑏 (0 ≤ 𝑎 ≤ 𝑏 ≤ 1018), w których żadne
-// dwie sąsiadujące cyfry nie są takie same? Jeśli na przykład 𝑎 = 123, 𝑏 = 321, to
-// prawidłową odpowiedzią będzie 171.
-
-// Mateusz Kłaptocz 
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 class Program
 {
-    static void Main()
-    {
-        long a = 123;
-        long b = 321;
+    // Słownik zapamiętujący wyniki,
+    // aby nie liczyć tych samych stanów wielokrotnie
+    static Dictionary<(int pos, int prevDigit, bool leading, bool tight), long> dictionaryNumberTest;
 
-        // Licz liczby w przedziale [a, b], w których żadne dwie sąsiadujące cyfry nie są takie same
-        Console.WriteLine(CountValidNumbers(a, b)); // Wynik: 171
+    static void Main(string[] args)
+    {
+        long a = 122;
+        long b = 4566;
+
+        // Wywołujemy funkcję zliczającą liczby w zakresie [a, b]
+        long result = CountValidNumbers(a, b);
+
+        // Wypisujemy wynik na ekran
+        Console.WriteLine(result);
     }
 
+    // Zwraca liczbę liczb w [a, b], gdzie żadne dwie sąsiadujące cyfry nie są takie same
     static long CountValidNumbers(long a, long b)
     {
-        // Liczymy liczby w zakresie [0, b], a następnie odejmujemy liczby w zakresie [0, a-1]
-        return CountNumbers(b) - CountNumbers(a - 1);
+        // Jeśli a > b, nic nie liczymy
+        if (a > b) return 0;
+
+        // Liczba w [a, b] = Liczba w [0, b] - Liczba w [0, a-1]
+        return CountUpTo(b) - CountUpTo(a - 1);
     }
 
-    static long CountNumbers(long num)
+    // Liczy liczby w [0, x], które spełniają warunek
+    static long CountUpTo(long x)
     {
-        var digits = GetDigits(num);
-        // Rozpoczynamy obliczenia od pozycji 0, poprzednia cyfra -1 (brak), i z ograniczeniem tight=true
-        return Dp(0, -1, true, digits);
+        // Jeśli x < 0, nie ma żadnych liczb w tym przedziale
+        if (x < 0) return 0;
+
+        // Rozbijamy x na cyfry, np. 4566 -> [4, 5, 6, 6]
+        List<int> digits = GetDigits(x);
+
+        // Czyścimy słownik przed każdym nowym liczeniem
+        dictionaryNumberTest = new Dictionary<(int, int, bool, bool), long>();
+
+        // Rozpoczynamy rekurencję od pozycji 0, poprzednia cyfra = -1, leading=true, tight=true
+        return CountDP(0, -1, true, true, digits);
     }
 
-    static long Dp(int pos, int prev, bool tight, List<int> digits)
+    // Główna funkcja rekurencyjna, zlicza liczbę poprawnych liczb
+    static long CountDP(int pos, int prevDigit, bool leading, bool tight, List<int> digits)
     {
-        // Jeśli osiągnęliśmy koniec liczby (wszystkie cyfry wybrano), to mamy 1 poprawną liczbę
-        if (pos == digits.Count)
-            return 1;
+        // Jeśli przeszliśmy przez wszystkie cyfry, mamy 1 poprawną liczbę
+        if (pos == digits.Count) return 1;
 
-        long result = 0;
+        // Sprawdzamy w słowniku, czy ten stan (pos, prevDigit, leading, tight) jest już policzony
+        var key = (pos, prevDigit, leading, tight);
+        if (dictionaryNumberTest.ContainsKey(key))
+            return dictionaryNumberTest[key];
 
-        // Ustal maksymalną cyfrę dla bieżącej pozycji
-        // Jeśli `tight` jest true, ograniczamy się do cyfry z `digits[pos]`, w przeciwnym razie limit to 9
+        // Ustalamy maksymalną cyfrę, którą możemy wybrać na tej pozycji
         int limit = tight ? digits[pos] : 9;
 
-        // Iterujemy po wszystkich możliwych cyfrach od 0 do limit
-        for (int d = 0; d <= limit; d++)
+        long ways = 0;
+
+        // Sprawdzamy wszystkie cyfry od 0 do limit
+        for (int digit = 0; digit <= limit; digit++)
         {
-            // Sąsiadujące cyfry muszą być różne, więc pomijamy przypadek, gdy `d == prev`
-            if (d != prev)
+            bool canUse = true;
+            int nextPrevDigit = prevDigit;
+
+            // Obsługa wiodących zer
+            if (leading && digit == 0)
             {
-                // Przechodzimy do następnej pozycji z nowym stanem
-                // `tight && (d == limit)` oznacza, że ograniczenie na górną granicę pozostaje aktywne
-                result += Dp(pos + 1, d, tight && (d == limit), digits);
+                nextPrevDigit = -1;
+            }
+            else
+            {
+                // Gdy nie jesteśmy w zerach wiodących, sprawdzamy warunek różności
+                if (!leading && digit == prevDigit) canUse = false;
+                nextPrevDigit = digit;
+            }
+
+            // Jeśli możemy użyć cyfry, wywołujemy rekurencję dla następnej pozycji
+            if (canUse)
+            {
+                bool nextLeading = leading && (digit == 0);
+                bool nextTight = tight && (digit == limit);
+                ways += CountDP(pos + 1, nextPrevDigit, nextLeading, nextTight, digits);
             }
         }
 
-        return result;
+        // Zapisujemy obliczony wynik w słowniku
+        dictionaryNumberTest[key] = ways;
+        return ways;
     }
 
-    static List<int> GetDigits(long num)
+    // Zamienia liczbę x na listę cyfr (od najbardziej znaczącej do najmniej)
+    static List<int> GetDigits(long x)
     {
-        var digits = new List<int>();
+        // Specjalny przypadek: x = 0
+        if (x == 0) return new List<int> { 0 };
 
-        // Rozbijamy liczbę na cyfry od końca i dodajemy je na początek listy
-        while (num > 0)
+        var result = new List<int>();
+        while (x > 0)
         {
-            digits.Insert(0, (int)(num % 10)); // Dodaj cyfrę na początek listy
-            num /= 10; // Usuwamy ostatnią cyfrę z liczby
+            // Dodajemy cyfrę na początek listy
+            result.Insert(0, (int)(x % 10));
+            x /= 10;
         }
-
-        return digits;
+        return result;
     }
 }
